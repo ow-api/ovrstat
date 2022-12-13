@@ -43,10 +43,25 @@ var (
 // Stats retrieves player stats
 // Universal method if you don't need to differentiate it
 func Stats(tag string) (*PlayerStats, error) {
+	var ps PlayerStats
+
+	platforms, err := retrievePlatforms(tag)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if len(platforms) == 0 {
+		return nil, ErrPlayerNotFound
+	}
+
+	if !platforms[0].IsPublic {
+		ps.Private = true
+		return &ps, nil
+	}
+
 	// Create the profile url for scraping
 	profileUrl := baseURL + "/" + strings.Replace(tag, "#", "-", -1) + "/"
-
-	log.Println("Profile URL", profileUrl)
 
 	// Perform the stats request and decode the response
 	res, err := http.Get(profileUrl)
@@ -67,32 +82,7 @@ func Stats(tag string) (*PlayerStats, error) {
 	}
 
 	// Scrapes all stats for the passed user and sets struct member data
-	ps := parseGeneralInfo(pd.Find(".Profile-masthead").First())
-
-	// Perform api request
-	var platforms []Platform
-
-	apires, err := http.Get(apiURL + url.PathEscape(tag))
-	if err != nil {
-		return nil, errors.Wrap(err, "Failed to perform platform API request")
-	}
-	defer apires.Body.Close()
-
-	// Decode received JSON
-	if err := json.NewDecoder(apires.Body).Decode(&platforms); err != nil {
-		return nil, errors.Wrap(err, "Failed to decode platform API response")
-	}
-
-	// Single, exact result
-	//p := platforms[0]
-
-	//ps.Name = p.Name
-	//ps.Prestige = int(math.Floor(float64(p.PlayerLevel) / 100))
-
-	if !platforms[0].IsPublic {
-		ps.Private = true
-		return &ps, nil
-	}
+	parseGeneralInfo(pd.Find(".Profile-masthead").First(), &ps)
 
 	ps.Name = pd.Find(".Profile-player--name").Text()
 
@@ -112,6 +102,26 @@ func Stats(tag string) (*PlayerStats, error) {
 	return &ps, nil
 }
 
+func retrievePlatforms(tag string) ([]Platform, error) {
+	// Perform api request
+	var platforms []Platform
+
+	apires, err := http.Get(apiURL + url.PathEscape(tag))
+
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to perform platform API request")
+	}
+
+	defer apires.Body.Close()
+
+	// Decode received JSON
+	if err := json.NewDecoder(apires.Body).Decode(&platforms); err != nil {
+		return nil, errors.Wrap(err, "Failed to decode platform API response")
+	}
+
+	return platforms, nil
+}
+
 var (
 	endorsementRegexp = regexp.MustCompile("/(\\d+)-([a-z0-9]+)\\.svg")
 	rankRegexp        = regexp.MustCompile("([a-zA-Z0-9]+)Tier-(\\d)-([a-z\\d]+)\\.(svg|png)")
@@ -119,9 +129,7 @@ var (
 
 // populateGeneralInfo extracts the users general info and returns it in a
 // PlayerStats struct
-func parseGeneralInfo(s *goquery.Selection) PlayerStats {
-	var ps PlayerStats
-
+func parseGeneralInfo(s *goquery.Selection, ps *PlayerStats) {
 	// Populates all general player information
 	ps.Icon, _ = s.Find(".Profile-player--portrait").Attr("src")
 	ps.Level, _ = strconv.Atoi(s.Find("div.player-level div.u-vertical-center").First().Text())
@@ -162,8 +170,6 @@ func parseGeneralInfo(s *goquery.Selection) PlayerStats {
 	})
 
 	ps.GamesWon, _ = strconv.Atoi(strings.Replace(s.Find("div.masthead p.masthead-detail.h4 span").Text(), " games won", "", -1))
-
-	return ps
 }
 
 // parseDetailedStats populates the passed stats collection with detailed statistics
