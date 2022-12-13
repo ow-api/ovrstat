@@ -2,7 +2,6 @@ package ovrstat
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 	"net/url"
 	"path"
@@ -20,16 +19,11 @@ const (
 
 	apiURL = "https://overwatch.blizzard.com/en-us/search/account-by-name/"
 
-	// PlatformXBL is platform : XBOX
-	PlatformXBL = "xbl"
-
-	// PlatformPSN is the platform : Playstation Network
-	PlatformPSN = "psn"
-
-	// PlatformPC is the platform : PC
+	// PlatformPC is a platform for PCs (mouseKeyboard in the page)
 	PlatformPC = "pc"
 
-	PlatformNS = "nintendo-switch"
+	// PlatformConsole is a consolidated platform of all consoles
+	PlatformConsole = "console"
 )
 
 var (
@@ -43,6 +37,13 @@ var (
 // Stats retrieves player stats
 // Universal method if you don't need to differentiate it
 func Stats(platformKey, tag string) (*PlayerStats, error) {
+	// Do platform key mapping
+	switch platformKey {
+	case PlatformPC:
+		platformKey = "mouseKeyboard"
+	}
+
+	// Parse the API response first
 	var ps PlayerStats
 
 	players, err := retrievePlayers(tag)
@@ -83,16 +84,12 @@ func Stats(platformKey, tag string) (*PlayerStats, error) {
 
 	ps.Name = pd.Find(".Profile-player--name").Text()
 
-	log.Println("Parsing detailed stats")
-
 	platforms := make(map[string]Platform)
 
 	pd.Find(".Profile-player--filters .Profile-player--filter").Each(func(i int, sel *goquery.Selection) {
 		id, _ := sel.Attr("id")
 
 		id = filterRegexp.FindStringSubmatch(id)[1]
-
-		log.Println(id)
 
 		viewID := "." + id + "-view"
 

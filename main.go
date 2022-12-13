@@ -4,7 +4,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/s32x/ovrstat/service"
+	"github.com/ow-api/ovrstat/service"
 )
 
 func main() {

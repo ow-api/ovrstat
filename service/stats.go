@@ -4,8 +4,8 @@ import (
 	"net/http"
 
 	"github.com/labstack/echo/v4"
+	"github.com/ow-api/ovrstat/ovrstat"
 	"github.com/pkg/errors"
-	"github.com/s32x/ovrstat/ovrstat"
 )
 
 // stats handles retrieving and serving Overwatch stats in JSON
