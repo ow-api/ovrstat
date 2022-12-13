@@ -1,17 +1,17 @@
 package ovrstat
 
+import "github.com/PuerkitoBio/goquery"
+
 // PlayerStats holds all stats on a specified Overwatch player
 type PlayerStats struct {
 	Icon             string                     `json:"icon"`
 	Name             string                     `json:"name"`
-	Level            int                        `json:"level"`
-	LevelIcon        string                     `json:"levelIcon"`
 	Endorsement      int                        `json:"endorsement"`
 	EndorsementIcon  string                     `json:"endorsementIcon"`
-	Prestige         int                        `json:"prestige"`
-	PrestigeIcon     string                     `json:"prestigeIcon"`
 	Ratings          []Rating                   `json:"ratings"`
+	GamesPlayed      int                        `json:"gamesPlayed"`
 	GamesWon         int                        `json:"gamesWon"`
+	GamesLost        int                        `json:"gamesLost"`
 	QuickPlayStats   QuickPlayStatsCollection   `json:"quickPlayStats"`
 	CompetitiveStats CompetitiveStatsCollection `json:"competitiveStats"`
 	Private          bool                       `json:"private"`
@@ -19,7 +19,7 @@ type PlayerStats struct {
 
 type Rating struct {
 	Group    string `json:"group"`
-	Level    int    `json:"level"`
+	Tier     int    `json:"tier"`
 	Role     string `json:"role"`
 	RoleIcon string `json:"roleIcon"`
 	RankIcon string `json:"rankIcon"`
@@ -27,7 +27,7 @@ type Rating struct {
 
 type StatsCollection struct {
 	TopHeroes   map[string]*TopHeroStats `json:"topHeroes"`
-	CareerStats map[string]*CareerStats  `json:"CareerStats"`
+	CareerStats map[string]*CareerStats  `json:"careerStats"`
 }
 
 type CompetitiveStatsCollection struct {
@@ -43,8 +43,8 @@ type QuickPlayStatsCollection struct {
 type TopHeroStats struct {
 	TimePlayed          string  `json:"timePlayed"`
 	GamesWon            int     `json:"gamesWon"`
-	WinPercentage       int     `json:"winPercentage"`
 	WeaponAccuracy      int     `json:"weaponAccuracy"`
+	CriticalHitAccuracy int     `json:"criticalHitAccuracy"`
 	EliminationsPerLife float64 `json:"eliminationsPerLife"`
 	MultiKillBest       int     `json:"multiKillBest"`
 	ObjectiveKills      float64 `json:"objectiveKills"`
@@ -52,21 +52,30 @@ type TopHeroStats struct {
 
 // CareerStats holds very detailed stats for each hero
 type CareerStats struct {
-	Assists       map[string]interface{} `json:"assists"`
-	Average       map[string]interface{} `json:"average"`
-	Best          map[string]interface{} `json:"best"`
-	Combat        map[string]interface{} `json:"combat"`
-	Deaths        map[string]interface{} `json:"deaths"`
-	HeroSpecific  map[string]interface{} `json:"heroSpecific"`
-	Game          map[string]interface{} `json:"game"`
-	MatchAwards   map[string]interface{} `json:"matchAwards"`
-	Miscellaneous map[string]interface{} `json:"miscellaneous"`
+	Assists      map[string]interface{} `json:"assists"`
+	Average      map[string]interface{} `json:"average"`
+	Best         map[string]interface{} `json:"best"`
+	Combat       map[string]interface{} `json:"combat"`
+	HeroSpecific map[string]interface{} `json:"heroSpecific"`
+	Game         map[string]interface{} `json:"game"`
+	MatchAwards  map[string]interface{} `json:"matchAwards"`
+
+	// Deaths appears to have been removed, so we hide it.
+	Deaths map[string]interface{} `json:"deaths,omitempty"`
 }
 
-// Platform represents a response from the search-by-name api request
-type Platform struct {
+// Player represents a response from the search-by-name api request
+type Player struct {
 	BattleTag string `json:"battleTag"`
 	Portrait  string `json:"portrait"`
 	Frame     string `json:"frame"`
 	IsPublic  bool   `json:"isPublic"`
+}
+
+// Platform represents a supported platform (PC, Console)
+type Platform struct {
+	Name        string
+	Active      bool
+	RankWrapper *goquery.Selection
+	ProfileView *goquery.Selection
 }

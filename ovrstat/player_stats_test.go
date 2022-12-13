@@ -7,7 +7,7 @@ import (
 )
 
 func TestPlayerStats(t *testing.T) {
-	stats, err := Stats(os.Getenv("TEST_USER"))
+	stats, err := Stats("mouseKeyboard", os.Getenv("TEST_USER"))
 
 	if err != nil {
 		t.Fatal(err)
