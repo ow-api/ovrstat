@@ -18,6 +18,7 @@ type PlayerStats struct {
 }
 
 type Rating struct {
+	Group    string `json:"group"`
 	Level    int    `json:"level"`
 	Role     string `json:"role"`
 	RoleIcon string `json:"roleIcon"`
@@ -64,11 +65,8 @@ type CareerStats struct {
 
 // Platform represents a response from the search-by-name api request
 type Platform struct {
-	Platform    string `json:"platform"`
-	ID          int    `json:"id"`
-	Name        string `json:"name"`
-	URLName     string `json:"urlName"`
-	PlayerLevel int    `json:"playerLevel"`
-	Portrait    string `json:"portrait"`
-	IsPublic    bool   `json:"isPublic"`
+	BattleTag string `json:"battleTag"`
+	Portrait  string `json:"portrait"`
+	Frame     string `json:"frame"`
+	IsPublic  bool   `json:"isPublic"`
 }

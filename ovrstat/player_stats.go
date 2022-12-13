@@ -2,10 +2,10 @@ package ovrstat
 
 import (
 	"encoding/json"
-	"fmt"
-	"math"
+	"log"
 	"net/http"
 	"net/url"
+	"path"
 	"regexp"
 	"strconv"
 	"strings"
@@ -16,9 +16,9 @@ import (
 )
 
 const (
-	baseURL = "https://playoverwatch.com/en-us/career"
+	baseURL = "https://overwatch.blizzard.com/en-us/career"
 
-	apiURL = "https://playoverwatch.com/en-us/search/account-by-name/"
+	apiURL = "https://overwatch.blizzard.com/en-us/search/account-by-name/"
 
 	// PlatformXBL is platform : XBOX
 	PlatformXBL = "xbl"
@@ -42,34 +42,14 @@ var (
 
 // Stats retrieves player stats
 // Universal method if you don't need to differentiate it
-func Stats(platform, tag string) (*PlayerStats, error) {
-	switch platform {
-	case PlatformPC:
-		return PCStats(tag) // Perform a stats lookup for PC
-	case PlatformPSN, PlatformXBL, PlatformNS:
-		return ConsoleStats(platform, tag) // Perform a stats lookup for Console
-	default:
-		return nil, ErrInvalidPlatform
-	}
-}
-
-// ConsoleStats retrieves player stats for Console
-func ConsoleStats(platform, tag string) (*PlayerStats, error) {
-	return playerStats(fmt.Sprintf("/%s/%s", platform, tag), platform)
-}
-
-// PCStats retrieves player stats for PC
-func PCStats(tag string) (*PlayerStats, error) {
-	return playerStats(fmt.Sprintf("/pc/%s", tag), "pc")
-}
-
-// playerStats retrieves all Overwatch statistics for a given player
-func playerStats(profilePath string, platform string) (*PlayerStats, error) {
+func Stats(tag string) (*PlayerStats, error) {
 	// Create the profile url for scraping
-	url := baseURL + profilePath
+	profileUrl := baseURL + "/" + strings.Replace(tag, "#", "-", -1) + "/"
+
+	log.Println("Profile URL", profileUrl)
 
 	// Perform the stats request and decode the response
-	res, err := http.Get(url)
+	res, err := http.Get(profileUrl)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to retrieve profile")
 	}
@@ -82,26 +62,17 @@ func playerStats(profilePath string, platform string) (*PlayerStats, error) {
 	}
 
 	// Checks if profile not found, site still returns 200 in this case
-	if pd.Find("h1.u-align-center").First().Text() == "Profile Not Found" {
+	if pd.Find("[slot=heading]").First().Text() == "Page Not Found" {
 		return nil, ErrPlayerNotFound
 	}
 
 	// Scrapes all stats for the passed user and sets struct member data
-	ps := parseGeneralInfo(pd.Find("div.masthead").First())
+	ps := parseGeneralInfo(pd.Find(".Profile-masthead").First())
 
 	// Perform api request
 	var platforms []Platform
 
-	tagPath := profilePath[strings.LastIndex(profilePath, "/")+1:]
-	apiPath := tagPath
-
-	if platform == PlatformNS {
-		apiPath = apiPath[0:strings.Index(apiPath, "-")]
-	} else if platform != PlatformPSN {
-		apiPath = strings.Replace(apiPath, "-", "%23", -1)
-	}
-
-	apires, err := http.Get(apiURL + apiPath)
+	apires, err := http.Get(apiURL + url.PathEscape(tag))
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to perform platform API request")
 	}
@@ -112,43 +83,20 @@ func playerStats(profilePath string, platform string) (*PlayerStats, error) {
 		return nil, errors.Wrap(err, "Failed to decode platform API response")
 	}
 
-	platforms = filterPlatform(tagPath, platform, platforms)
+	// Single, exact result
+	//p := platforms[0]
 
-	switch len(platforms) {
-	case 0:
-		// Not found
-		return nil, ErrPlayerNotFound
-	case 1:
-		// Single, exact result
-		p := platforms[0]
+	//ps.Name = p.Name
+	//ps.Prestige = int(math.Floor(float64(p.PlayerLevel) / 100))
 
-		ps.Name = p.Name
-		ps.Prestige = int(math.Floor(float64(p.PlayerLevel) / 100))
-	default:
-		// Matched multiple results (2+), use exact name if possible and the first result
-		var foundMatch bool
-
-		for _, p := range platforms {
-			if p.Name == ps.Name {
-				ps.Prestige = int(math.Floor(float64(p.PlayerLevel) / 100))
-
-				foundMatch = true
-				break
-			}
-		}
-
-		if !foundMatch {
-			p := platforms[0]
-
-			ps.Name = p.Name
-			ps.Prestige = int(math.Floor(float64(p.PlayerLevel) / 100))
-		}
-	}
-
-	if pd.Find("p.masthead-permission-level-text").First().Text() == "Private Profile" {
+	if !platforms[0].IsPublic {
 		ps.Private = true
 		return &ps, nil
 	}
+
+	ps.Name = pd.Find(".Profile-player--name").Text()
+
+	log.Println("Parsing detailed stats")
 
 	parseDetailedStats(pd.Find("div#quickplay").First(), &ps.QuickPlayStats.StatsCollection)
 	parseDetailedStats(pd.Find("div#competitive").First(), &ps.CompetitiveStats.StatsCollection)
@@ -164,18 +112,10 @@ func playerStats(profilePath string, platform string) (*PlayerStats, error) {
 	return &ps, nil
 }
 
-// Filters the platform slice to return only matching platforms
-func filterPlatform(tagPath, platform string, platforms []Platform) []Platform {
-	out := make([]Platform, 0)
-
-	for _, p := range platforms {
-		if p.Platform == platform && (platform != PlatformNS || p.URLName == tagPath) {
-			out = append(out, p)
-		}
-	}
-
-	return out
-}
+var (
+	endorsementRegexp = regexp.MustCompile("/(\\d+)-([a-z0-9]+)\\.svg")
+	rankRegexp        = regexp.MustCompile("([a-zA-Z0-9]+)Tier-(\\d)-([a-z\\d]+)\\.(svg|png)")
+)
 
 // populateGeneralInfo extracts the users general info and returns it in a
 // PlayerStats struct
@@ -183,20 +123,12 @@ func parseGeneralInfo(s *goquery.Selection) PlayerStats {
 	var ps PlayerStats
 
 	// Populates all general player information
-	ps.Icon, _ = s.Find("img.player-portrait").Attr("src")
+	ps.Icon, _ = s.Find(".Profile-player--portrait").Attr("src")
 	ps.Level, _ = strconv.Atoi(s.Find("div.player-level div.u-vertical-center").First().Text())
 	ps.LevelIcon, _ = s.Find("div.player-level").Attr("style")
-	ps.LevelIcon = strings.Replace(ps.LevelIcon, "background-image:url(", "", -1)
-	ps.LevelIcon = strings.Replace(ps.LevelIcon, ")", "", -1)
-	ps.LevelIcon = strings.TrimSpace(ps.LevelIcon)
 	ps.PrestigeIcon, _ = s.Find("div.player-rank").Attr("style")
-	ps.PrestigeIcon = strings.Replace(ps.PrestigeIcon, "background-image:url(", "", -1)
-	ps.PrestigeIcon = strings.Replace(ps.PrestigeIcon, ")", "", -1)
-	ps.PrestigeIcon = strings.TrimSpace(ps.PrestigeIcon)
-	ps.Endorsement, _ = strconv.Atoi(s.Find("div.EndorsementIcon-tooltip div.u-center").First().Text())
-	ps.EndorsementIcon, _ = s.Find("div.EndorsementIcon").Attr("style")
-	ps.EndorsementIcon = strings.Replace(ps.EndorsementIcon, "background-image:url(", "", -1)
-	ps.EndorsementIcon = strings.Replace(ps.EndorsementIcon, ")", "", -1)
+	ps.EndorsementIcon, _ = s.Find(".Profile-playerSummary--endorsement").Attr("src")
+	ps.Endorsement, _ = strconv.Atoi(endorsementRegexp.FindStringSubmatch(ps.EndorsementIcon)[1])
 
 	// Parse Endorsement Icon path (/svg?path=)
 	if strings.Index(ps.EndorsementIcon, "/svg") == 0 {
@@ -208,19 +140,22 @@ func parseGeneralInfo(s *goquery.Selection) PlayerStats {
 	}
 
 	// Ratings.
-	s.Find("div.masthead-player-progression:not(.masthead-player-progression--mobile) div.competitive-rank div.competitive-rank-role").Each(func(i int, rankSel *goquery.Selection) {
+	s.Find("div.Profile-playerSummary--rankWrapper div.Profile-playerSummary--roleWrapper").Each(func(i int, sel *goquery.Selection) {
 		// Rank selections.
-		sel := rankSel.Find("div.competitive-rank-section")
 
-		role, _ := sel.Find("div.competitive-rank-tier.competitive-rank-tier-tooltip").Attr("data-ow-tooltip-text")
-		roleIcon, _ := sel.Find("img.competitive-rank-role-icon").Attr("src")
-		rankIcon, _ := sel.Find("div.competitive-rank-tier.competitive-rank-tier-tooltip img.competitive-rank-tier-icon").Attr("src")
-		level, _ := strconv.Atoi(sel.Find("div.competitive-rank-level").Text())
-		formatedRole := strings.TrimSuffix(role, " Skill Rating")
+		roleIcon, _ := sel.Find("div.Profile-playerSummary--role img").Attr("src")
+		// Format is /(offense|support|...)-HEX.svg
+		role := path.Base(roleIcon)
+		role = role[0:strings.Index(role, "-")]
+		rankIcon, _ := sel.Find("img.Profile-playerSummary--rank").Attr("src")
+
+		rankInfo := rankRegexp.FindStringSubmatch(rankIcon)
+		level, _ := strconv.Atoi(rankInfo[2])
 
 		ps.Ratings = append(ps.Ratings, Rating{
+			Group:    rankInfo[1],
 			Level:    level,
-			Role:     strings.ToLower(formatedRole),
+			Role:     role,
 			RoleIcon: roleIcon,
 			RankIcon: rankIcon,
 		})
