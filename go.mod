@@ -7,7 +7,6 @@ require (
 	github.com/jinzhu/inflection v1.0.0
 	github.com/labstack/echo/v4 v4.9.0
 	github.com/pkg/errors v0.9.1
-	github.com/s32x/ovrstat v0.0.0-20221001225903-cdfc464df2b7
 )
 
 require (
