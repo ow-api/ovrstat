@@ -121,7 +121,7 @@ func Stats(platformKey, tag string) (*PlayerStats, error) {
 	parseDetailedStats(platform, ".quickPlay-view", &ps.QuickPlayStats.StatsCollection)
 	parseDetailedStats(platform, ".competitive-view", &ps.CompetitiveStats.StatsCollection)
 
-	competitiveSeason, _ := pd.Find("div[data-competitive-season]").Attr("data-competitive-season")
+	competitiveSeason, _ := pd.Find("[data-latestherostatrankseasonow2]").Attr("data-latestherostatrankseasonow2")
 
 	if competitiveSeason != "" {
 		competitiveSeason, _ := strconv.Atoi(competitiveSeason)

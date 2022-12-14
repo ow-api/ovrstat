@@ -7,6 +7,11 @@ import (
 )
 
 func TestPlayerStats(t *testing.T) {
+	if os.Getenv("TEST_USER") == "" {
+		t.Skip("Skipping test due to missing user")
+		return
+	}
+
 	stats, err := Stats("mouseKeyboard", os.Getenv("TEST_USER"))
 
 	if err != nil {
