@@ -32,6 +32,9 @@ var (
 
 	// ErrInvalidPlatform is thrown when the passed params are incorrect
 	ErrInvalidPlatform = errors.New("Invalid platform")
+
+	// regexpPlayerTagName matches a player's name for search rather than the full tag
+	regexpPlayerTagName = regexp.MustCompile("(.*?)[#\\-]\\d+")
 )
 
 // Stats retrieves player stats
@@ -41,6 +44,8 @@ func Stats(platformKey, tag string) (*PlayerStats, error) {
 	switch platformKey {
 	case PlatformPC:
 		platformKey = "mouseKeyboard"
+	case PlatformConsole:
+		platformKey = "controller"
 	}
 
 	// Parse the API response first
@@ -52,11 +57,37 @@ func Stats(platformKey, tag string) (*PlayerStats, error) {
 		return nil, err
 	}
 
+	var player *Player
+
 	if len(players) == 0 {
-		return nil, ErrPlayerNotFound
+		// Fall back to non-exact search to try to match the user
+		tagMatch := regexpPlayerTagName.FindStringSubmatch(tag)
+
+		if tagMatch == nil {
+			return nil, ErrPlayerNotFound
+		}
+
+		players, err = retrievePlayers(tagMatch[1])
+
+		if err != nil {
+			return nil, err
+		}
+
+		for _, p := range players {
+			if strings.EqualFold(tag, p.BattleTag) {
+				player = &p
+				break
+			}
+		}
+
+		if player == nil {
+			return nil, ErrPlayerNotFound
+		}
+	} else {
+		player = &players[0]
 	}
 
-	if !players[0].IsPublic {
+	if !player.IsPublic {
 		ps.Private = true
 		return &ps, nil
 	}
@@ -198,12 +229,21 @@ func parseGeneralInfo(platform Platform, s *goquery.Selection, ps *PlayerStats) 
 	// Note that .is-active is the default platform
 	platform.RankWrapper.Find("div.Profile-playerSummary--roleWrapper").Each(func(i int, sel *goquery.Selection) {
 		// Rank selections.
+		roleIcon, found := sel.Find(" img").Attr("src")
 
-		roleIcon, _ := sel.Find("div.Profile-playerSummary--role img").Attr("src")
-		// Format is /(offense|support|...)-HEX.svg
+		if !found {
+			return
+		}
+
+		// Format is /(offense|support|...)-HEX.(png|svg)
+		// svg is in another tag, png is in the img tag
 		role := path.Base(roleIcon)
 		role = role[0:strings.Index(role, "-")]
-		rankIcon, _ := sel.Find("img.Profile-playerSummary--rank").Attr("src")
+		rankIcon, found := sel.Find("img.Profile-playerSummary--rank").Attr("src")
+
+		if !found {
+			return
+		}
 
 		rankInfo := rankRegexp.FindStringSubmatch(rankIcon)
 		tier, _ := strconv.Atoi(rankInfo[2])
