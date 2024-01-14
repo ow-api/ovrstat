@@ -14,7 +14,7 @@ RUN GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o ./bin/server
 FROM alpine:latest
 
 # Dependencies
-RUN apk update 
+RUN apk update
 RUN apk add --no-cache ca-certificates
 
 # Static files and Binary
