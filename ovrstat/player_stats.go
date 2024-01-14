@@ -109,7 +109,7 @@ func Stats(platformKey, tag string) (*PlayerStats, error) {
 	}
 
 	// Checks if profile not found, site still returns 200 in this case
-	if pd.Find("[slot=heading]").First().Text() == "Page Not Found" {
+	if pd.Find("[slot=heading]").First().Text() == "Profile Not Found" {
 		return nil, ErrPlayerNotFound
 	}
 
