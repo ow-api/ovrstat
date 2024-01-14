@@ -1,13 +1,9 @@
 # ============================== BINARY BUILDER ==============================
-FROM golang:latest as builder
+FROM golang:alpine as builder
 
 # Copy in the source
 COPY . /src
 WORKDIR /src
-
-# Dependencies
-RUN apt-get update -y 
-RUN apt-get upgrade -y
 
 # Vendor, Test and Build the Binary
 RUN go mod vendor
