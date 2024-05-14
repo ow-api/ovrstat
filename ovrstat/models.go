@@ -18,11 +18,12 @@ type PlayerStats struct {
 }
 
 type Rating struct {
-	Group    string `json:"group"`
-	Tier     int    `json:"tier"`
-	Role     string `json:"role"`
-	RoleIcon string `json:"roleIcon"`
-	RankIcon string `json:"rankIcon"`
+	Group        string `json:"group"`
+	Tier         int    `json:"tier"`
+	Role         string `json:"role"`
+	RoleIcon     string `json:"roleIcon"`
+	RankIcon     string `json:"rankIcon"`
+	DivisionIcon string `json:"divisionIcon"`
 }
 
 type StatsCollection struct {
@@ -70,6 +71,7 @@ type Player struct {
 	Portrait  string `json:"portrait"`
 	Frame     string `json:"frame"`
 	IsPublic  bool   `json:"isPublic"`
+	URL       string `json:"url"`
 }
 
 // Platform represents a supported platform (PC, Console)

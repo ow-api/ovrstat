@@ -2,6 +2,7 @@ package ovrstat
 
 import (
 	"encoding/json"
+	"golang.org/x/net/html"
 	"net/http"
 	"net/url"
 	"path"
@@ -93,7 +94,7 @@ func Stats(platformKey, tag string) (*PlayerStats, error) {
 	}
 
 	// Create the profile url for scraping
-	profileUrl := baseURL + "/" + strings.Replace(tag, "#", "-", -1) + "/"
+	profileUrl := baseURL + "/" + player.URL + "/"
 
 	// Perform the stats request and decode the response
 	res, err := http.Get(profileUrl)
@@ -204,7 +205,8 @@ func retrievePlayers(tag string) ([]Player, error) {
 
 var (
 	endorsementRegexp = regexp.MustCompile("/(\\d+)-([a-z0-9]+)\\.svg")
-	rankRegexp        = regexp.MustCompile("([a-zA-Z0-9]+)Tier-(\\d)-([a-z\\d]+)\\.(svg|png)")
+	rankRegexp        = regexp.MustCompile("([a-zA-Z0-9]+)Tier-([a-z\\d]+)\\.(svg|png)")
+	divisionRegexp    = regexp.MustCompile("TierDivision_(\\d+)-([a-z\\d]+)\\.(svg|png)")
 	filterRegexp      = regexp.MustCompile("^([a-zA-Z]+)Filter$")
 )
 
@@ -227,9 +229,10 @@ func parseGeneralInfo(platform Platform, s *goquery.Selection, ps *PlayerStats) 
 
 	// Ratings
 	// Note that .is-active is the default platform
+	// Note that this should have error handling! This is bad code!
 	platform.RankWrapper.Find("div.Profile-playerSummary--roleWrapper").Each(func(i int, sel *goquery.Selection) {
 		// Rank selections.
-		roleIcon, found := sel.Find(" img").Attr("src")
+		roleIcon, found := sel.Find("img").Attr("src")
 
 		if !found {
 			return
@@ -239,23 +242,68 @@ func parseGeneralInfo(platform Platform, s *goquery.Selection, ps *PlayerStats) 
 		// svg is in another tag, png is in the img tag
 		role := path.Base(roleIcon)
 		role = role[0:strings.Index(role, "-")]
-		rankIcon, found := sel.Find("img.Profile-playerSummary--rank").Attr("src")
+
+		rankIcons := sel.Find("img.Profile-playerSummary--rank")
+
+		if rankIcons.Length() < 2 {
+			return
+		}
+
+		rankIcon, found := findAttribute("src", rankIcons.Get(0))
+
+		if !found {
+			return
+		}
+
+		divisionIcon, found := findAttribute("src", rankIcons.Get(1))
 
 		if !found {
 			return
 		}
 
 		rankInfo := rankRegexp.FindStringSubmatch(rankIcon)
-		tier, _ := strconv.Atoi(rankInfo[2])
+		divisionInfo := divisionRegexp.FindStringSubmatch(divisionIcon)
+		tier, _ := strconv.Atoi(divisionInfo[1])
 
 		ps.Ratings = append(ps.Ratings, Rating{
-			Group:    rankInfo[1],
-			Tier:     tier,
-			Role:     role,
-			RoleIcon: roleIcon,
-			RankIcon: rankIcon,
+			Group:        rankInfo[1],
+			Tier:         tier,
+			Role:         role,
+			RoleIcon:     roleIcon,
+			RankIcon:     rankIcon,
+			DivisionIcon: divisionIcon,
 		})
 	})
+}
+
+func findAttribute(name string, node *html.Node) (string, bool) {
+	if ptr := getAttributePtr(name, node); ptr != nil {
+		return ptr.Val, true
+	}
+
+	return "", false
+}
+
+func getAttributePtr(attrName string, n *html.Node) *html.Attribute {
+	if n == nil {
+		return nil
+	}
+
+	for i, a := range n.Attr {
+		if a.Key == attrName {
+			return &n.Attr[i]
+		}
+	}
+	return nil
+}
+
+// Private function to get the specified attribute's value from a node.
+func getAttributeValue(attrName string, n *html.Node) (val string, exists bool) {
+	if a := getAttributePtr(attrName, n); a != nil {
+		val = a.Val
+		exists = true
+	}
+	return
 }
 
 // parseDetailedStats populates the passed stats collection with detailed statistics
